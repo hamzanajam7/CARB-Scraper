@@ -625,14 +625,19 @@ async function loadTree() {
   }
 }
 
+// Depth 0 = Division, 1 = Chapter. 2+ = Articles and below (collapsed — click to expand).
+const TREE_EXPANDED_DEPTH = 1;
+
 function buildTreeNode(node) {
   const div = document.createElement('div');
   div.className = 'tree-node';
   const hasChildren = node.children && node.children.length > 0;
+  const depth = typeof node.depth === 'number' ? node.depth : 0;
+  const startOpen = hasChildren && depth <= TREE_EXPANDED_DEPTH;
   const label = document.createElement('div');
   label.className = 'tree-label';
   label.innerHTML = `
-    <span class="tree-toggle">${hasChildren ? '&#9658;' : '&nbsp;'}</span>
+    <span class="tree-toggle">${hasChildren ? (startOpen ? '&#9660;' : '&#9658;') : '&nbsp;'}</span>
     <span class="tree-title" title="${escHtml(node.title || 'Untitled')}">${escHtml(node.title || 'Untitled')}</span>
   `;
   label.onclick = () => {
@@ -650,7 +655,7 @@ function buildTreeNode(node) {
   div.appendChild(label);
   if (hasChildren) {
     const childContainer = document.createElement('div');
-    childContainer.className = 'tree-children';
+    childContainer.className = startOpen ? 'tree-children open' : 'tree-children';
     node.children.forEach(c => childContainer.appendChild(buildTreeNode(c)));
     div.appendChild(childContainer);
   }
