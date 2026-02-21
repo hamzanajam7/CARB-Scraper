@@ -23,6 +23,9 @@ def _extract_subject(query: str) -> str:
         r"path\s+from\s+['\"]?(.+?)['\"]?\??$",
         r"(?:hierarchy|structure)\s+of\s+['\"]?(.+?)['\"]?\??$",
         r"(?:where\s+(?:does|is))\s+['\"]?(.+?)['\"]?\s+(?:sit|belong|live|fit|fall|go)",
+        r"what\s+(?:is|sits?)\s+above\s+['\"]?(.+?)['\"]?(?:\s+in\s+|\??$)",
+        r"what\s+(?:is|sits?)\s+below\s+['\"]?(.+?)['\"]?(?:\s+in\s+|\??$)",
+        r"['\"]?(.+?)['\"]?\s+sits?\s+(?:above|below|under)",
         r"(?:under\s+which).*?['\"]?(.+?)['\"]?\??$",
         r"links?\s+(?:from|to)\s+['\"]?(.+?)['\"]?\??$",
         r"what\s+links?\s+does\s+['\"]?(.+?)['\"]?\s+have",
@@ -40,6 +43,7 @@ async def answer_relationship(query: str, db: Database) -> str | None:
     subject = _extract_subject(query)
     # Strip leading articles so "the heavy-duty engine section" → "heavy-duty engine section"
     subject = re.sub(r"^(the|a|an)\s+", "", subject, flags=re.IGNORECASE)
+    subject = re.sub(r"\s+in\s+the\b.*", "", subject, flags=re.IGNORECASE).strip()
     pages = await db.find_pages_by_title(subject, limit=3)
 
     if not pages:
@@ -82,7 +86,7 @@ async def answer_relationship(query: str, db: Database) -> str | None:
         else:
             lines.append(f"No siblings found for **'{page['title']}'**.")
 
-    elif re.search(r"\bpath\b|\bhierarchy\b|\bwhere\b|\bsit\b|\bbelong\b", q):
+    elif re.search(r"\bpath\b|\bhierarchy\b|\bwhere\b|\bsits?\b|\bbelong\b|\babove\b|\bbelow\b", q):
         path = await db.get_path_to_root(pid)
         if path:
             lines.append(f"**Path from root to '{page['title']}':**")

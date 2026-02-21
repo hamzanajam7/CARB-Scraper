@@ -3,11 +3,45 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import AsyncGenerator
 
 import anthropic
 
 from src.db.database import Database
+
+# CARB-specific acronym expansions for FTS query improvement.
+# Keys are matched as whole words (case-insensitive); values are appended
+# so the original term is preserved alongside the expansion.
+_ACRONYMS: dict[str, str] = {
+    "ZEB":  "zero-emission bus",
+    "ZEBs": "zero-emission buses",
+    "ZEV":  "zero-emission vehicle",
+    "ZEVs": "zero-emission vehicles",
+    "PHEV": "plug-in hybrid electric vehicle",
+    "PHEVs": "plug-in hybrid electric vehicles",
+    "OBD":  "on-board diagnostic",
+    "NOx":  "oxides of nitrogen",
+    "PM":   "particulate matter",
+    "GHG":  "greenhouse gas",
+    "ICT":  "innovative clean transit",
+    "ACT":  "advanced clean trucks",
+    "HD":   "heavy-duty",
+    "LD":   "light-duty",
+    "MD":   "medium-duty",
+    "FTP":  "federal test procedure",
+    "BHP":  "brake horsepower",
+    "SOREL": "solid oxide regenerative electrolysis",
+}
+
+
+def _expand_acronyms(query: str) -> str:
+    """Replace known acronyms with 'ACRONYM expansion' for better FTS recall."""
+    result = query
+    for acronym, expansion in _ACRONYMS.items():
+        pattern = rf"\b{re.escape(acronym)}\b"
+        result = re.sub(pattern, f"{acronym} {expansion}", result, flags=re.IGNORECASE)
+    return result
 
 _client: anthropic.AsyncAnthropic | None = None
 
@@ -42,7 +76,8 @@ async def answer_content_stream(
     query: str, db: Database
 ) -> AsyncGenerator[str, None]:
     """Yield answer tokens from Claude with FTS5-retrieved context."""
-    docs = await db.fts_search(query, limit=8)
+    fts_query = _expand_acronyms(query)
+    docs = await db.fts_search(fts_query, limit=8)
 
     # Enrich snippets with fuller content for top results
     for doc in docs[:5]:

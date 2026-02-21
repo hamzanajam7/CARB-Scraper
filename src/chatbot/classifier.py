@@ -21,6 +21,9 @@ _RELATIONSHIP_PATTERNS = [
     r"\blinks?\s+(from|does|in)\b",
     r"\bwhat\s+links?\b",
     r"\bsit\s+in\b",
+    r"\bsits?\s+(above|below|under)\b",
+    r"\bwhat\s+is\s+above\b",
+    r"\bwhat\s+is\s+below\b",
 ]
 
 _RELATIONSHIP_RE = re.compile(
