@@ -280,7 +280,7 @@ class Database:
     async def get_tree(self, max_depth: int = 4) -> list[dict]:
         """Return root nodes with nested children up to max_depth."""
         async with self._db.execute(
-            "SELECT id, title, url, depth FROM pages WHERE parent_id IS NULL ORDER BY title",
+            "SELECT id, title, url, depth FROM pages WHERE parent_id IS NULL ORDER BY id",
         ) as cur:
             roots = [dict(r) for r in await cur.fetchall()]
 
@@ -294,7 +294,7 @@ class Database:
         if current_depth > max_depth:
             return []
         async with self._db.execute(
-            "SELECT id, title, url, depth FROM pages WHERE parent_id = ? ORDER BY title",
+            "SELECT id, title, url, depth FROM pages WHERE parent_id = ? ORDER BY id",
             (parent_id,),
         ) as cur:
             children = [dict(r) for r in await cur.fetchall()]
