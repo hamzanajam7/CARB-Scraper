@@ -36,15 +36,15 @@ def _extract_subject(query: str) -> str:
     return " ".join(words[-3:]) if len(words) >= 3 else query
 
 
-async def answer_relationship(query: str, db: Database) -> str:
+async def answer_relationship(query: str, db: Database) -> str | None:
     subject = _extract_subject(query)
+    # Strip leading articles so "the heavy-duty engine section" → "heavy-duty engine section"
+    subject = re.sub(r"^(the|a|an)\s+", "", subject, flags=re.IGNORECASE)
     pages = await db.find_pages_by_title(subject, limit=3)
 
     if not pages:
-        return (
-            f"I couldn't find any document matching **{subject}** in the database. "
-            "Try a different keyword or check that the crawler has indexed that section."
-        )
+        # Signal caller to fall back to content/LLM path
+        return None
 
     # Use the best match (first result)
     page = pages[0]

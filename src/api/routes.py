@@ -64,29 +64,32 @@ async def chat(request: Request):
         # Synchronous graph answer — return as plain SSE
         answer = await answer_relationship(query, db)
 
-        async def relationship_stream():
-            yield f"data: {json.dumps({'text': answer, 'done': False})}\n\n"
-            yield f"data: {json.dumps({'text': '', 'done': True})}\n\n"
-
-        return StreamingResponse(
-            relationship_stream(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
-    else:
-        # Streaming LLM answer
-        async def content_stream():
-            try:
-                async for token in answer_content_stream(query, db):
-                    payload = json.dumps({"text": token, "done": False})
-                    yield f"data: {payload}\n\n"
+        if answer is not None:
+            async def relationship_stream():
+                yield f"data: {json.dumps({'text': answer, 'done': False})}\n\n"
                 yield f"data: {json.dumps({'text': '', 'done': True})}\n\n"
-            except Exception as e:
-                error_payload = json.dumps({"text": f"\n\n**Error:** {e}", "done": True})
-                yield f"data: {error_payload}\n\n"
 
-        return StreamingResponse(
-            content_stream(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-        )
+            return StreamingResponse(
+                relationship_stream(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
+        # No document matched — fall through to LLM content path
+        logger.info("Relationship lookup found no document; falling back to content path")
+
+    # Streaming LLM answer (content path, or fallback from failed relationship lookup)
+    async def content_stream():
+        try:
+            async for token in answer_content_stream(query, db):
+                payload = json.dumps({"text": token, "done": False})
+                yield f"data: {payload}\n\n"
+            yield f"data: {json.dumps({'text': '', 'done': True})}\n\n"
+        except Exception as e:
+            error_payload = json.dumps({"text": f"\n\n**Error:** {e}", "done": True})
+            yield f"data: {error_payload}\n\n"
+
+    return StreamingResponse(
+        content_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
