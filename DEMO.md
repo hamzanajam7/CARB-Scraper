@@ -187,6 +187,72 @@ Click `+`, open a new chat, ask:
 
 ---
 
+## Challenges Encountered (Good to Mention in Demo)
+
+These are real problems that came up during development — mentioning them shows honest engineering thinking and problem-solving ability.
+
+---
+
+### 1. Crawler Scope Drift — Going Way Outside CARB
+
+**What happened:** The first crawl run went completely off-track — it started picking up Business Regulations, Tourism pages, and other unrelated California agencies. The crawler was following breadcrumb navigation links at the top of every Westlaw page that pointed back up to the full California Code of Regulations TOC, which then linked out to every other division and agency in the state.
+
+**Fix 1:** Added a filter to only follow links that carry a `?guid=` parameter. Navigation and breadcrumb links don't have GUIDs — only actual content pages do. This cut out most of the drift.
+
+**Fix 2:** A second drift remained — "Title 13. Motor Vehicles" had a GUID, so it passed the first filter. Following it led into Division 1 (DMV) and Division 2 (CHP). Added a second filter to skip any link whose text matches `Title N.` — these are always upward-hierarchy links that take you out of scope.
+
+> "This taught me that domain filtering alone isn't enough when the site uses the same domain for everything. You need content-level filters — in this case, GUID presence and link text patterns."
+
+---
+
+### 2. Breadcrumb Text Leaking Into Content
+
+**What happened:** Every single page's scraped content started with `"Home Title 13. Motor Vehicles Division 3. Air Resources Board Chapter 1..."` — the Westlaw breadcrumb navigation injected at the top of every page was being captured as part of the document content. This polluted the FTS index and made content answers noisy.
+
+**Fix:** Added a regex stripping step in the extractor. For pages with regulation text, it finds the first `§ N` section marker and slices content from there. For TOC pages with no `§`, it strips just the opening `Home ...` line. Also ran a one-time cleanup script on the already-crawled 93 pages to fix existing records and rebuilt the FTS5 index.
+
+> "This is a good example of why content extraction always needs domain-specific tuning — generic CSS selectors get you 80% of the way but the last 20% needs site-specific knowledge."
+
+---
+
+### 3. SQLite Disk I/O Error on Restart
+
+**What happened:** When restarting the crawler, SQLite threw a disk I/O error on startup. The cause was deleting `carb.db` while the FastAPI server still had the file open — SQLite's WAL mode leaves behind `carb.db-wal` and `carb.db-shm` shared memory files, which became orphaned and corrupted the next open attempt.
+
+**Fix:** Always stop the server before deleting the database, and delete all three files together (`carb.db`, `carb.db-wal`, `carb.db-shm`).
+
+> "SQLite WAL mode is great for concurrent reads during a live crawl, but you have to respect the file locking — it's not safe to delete the DB out from under an open connection."
+
+---
+
+### 4. FTS5 Search Failing on Natural Language Queries
+
+**What happened:** Asking "What does CARB say about vehicle emissions limits?" returned no results. FTS5 was treating the full natural language sentence as an AND query — requiring all words including "what", "does", "say", "about" to appear in the same document. The trailing `?` also broke FTS5's query parser entirely.
+
+**Fix:** Added a preprocessing step before querying FTS5 — strip punctuation, remove common stop words (what, does, say, about, etc.), then use OR logic between the remaining keywords so BM25 can rank documents by relevance rather than requiring every word to match.
+
+> "FTS5 is powerful but it's a query language, not a natural language processor. You need to sanitise user input before handing it to the engine."
+
+---
+
+### 5. Path Query Extracting the Wrong Subject
+
+**What happened:** "Show path from root to Chapter 1" returned nothing. The subject extractor regex was capturing `"root to Chapter 1"` as the search term instead of just `"Chapter 1"`, so the database lookup found no match.
+
+**Fix:** Added a specific regex pattern for the `path from X to Y` form that captures only the destination Y, rather than the generic `path from (.+)` that grabbed everything after "from".
+
+> "A small regex mistake with big user-facing impact — a good reminder to test with the exact phrasing from the spec, not just obvious cases."
+
+---
+
+### 6. Server Showing Stale Page Count
+
+**What happened:** After the crawl finished at 93 pages, the API was still reporting 60 pages. The FastAPI server had been started mid-crawl — while SQLite WAL mode allows concurrent writes during the crawl, the server process was reading an older snapshot.
+
+**Fix:** Simply restarting the server after the crawl completed picked up the full 93 pages. In a production system this wouldn't be an issue since the crawl and server wouldn't run simultaneously against the same DB connection.
+
+---
+
 ## If Something Goes Wrong
 
 | Problem | Recovery |
