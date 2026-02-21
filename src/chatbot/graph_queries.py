@@ -17,7 +17,10 @@ def _extract_subject(query: str) -> str:
     """Pull the document name / keyword from a relationship query."""
     patterns = [
         r"(?:parent|children?|siblings?)\s+of\s+['\"]?(.+?)['\"]?\??$",
-        r"(?:path\s+(?:from|to))\s+['\"]?(.+?)['\"]?\??$",
+        # "path from root to Chapter 1" → capture destination after last "to"
+        r"path\s+from\s+\S+\s+to\s+['\"]?(.+?)['\"]?\??$",
+        r"path\s+to\s+['\"]?(.+?)['\"]?\??$",
+        r"path\s+from\s+['\"]?(.+?)['\"]?\??$",
         r"(?:hierarchy|structure)\s+of\s+['\"]?(.+?)['\"]?\??$",
         r"(?:where\s+(?:does|is))\s+['\"]?(.+?)['\"]?\s+(?:sit|belong|live)",
         r"(?:under\s+which).*?['\"]?(.+?)['\"]?\??$",
