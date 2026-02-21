@@ -120,6 +120,10 @@ async def extract_page(page: Page, base_url: str) -> ExtractedPage:
         normalised = full_url.split("#")[0]
         if normalised in seen_hrefs:
             continue
+        # Only follow links that have a guid — this keeps us within the CARB
+        # content tree and skips breadcrumb/navigation links to the full CCR TOC
+        if not parse_qs(urlparse(normalised).query).get("guid"):
+            continue
         seen_hrefs.add(normalised)
         link_text = _clean_text(a.get_text()) or normalised
         links.append((normalised, link_text))

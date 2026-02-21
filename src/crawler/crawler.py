@@ -26,9 +26,9 @@ ROOT_URL = (
     "&contextData=(sc.Default)"
 )
 
-MAX_PAGES = 500
+MAX_PAGES = 2000         # CARB-only scope is much smaller than full CCR
 MAX_DEPTH = 6
-CRAWL_TIMEOUT_SEC = 1800  # 30 minutes
+CRAWL_TIMEOUT_SEC = 3600  # 60 minutes
 REQUEST_DELAY_SEC = 1.0
 
 
