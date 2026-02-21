@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CARB Regulations Chatbot</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22253a;
+    --border: #2e3250;
+    --accent: #4f8ef7;
+    --accent2: #6c63ff;
+    --text: #e8eaf0;
+    --muted: #8b90a8;
+    --success: #4caf84;
+    --warning: #f5a623;
+    --sidebar-w: 300px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+         background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+
+  /* Header */
+  #header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  #header h1 { font-size: 1.05rem; font-weight: 600; color: var(--accent); }
+  #header-right { display: flex; align-items: center; gap: 12px; }
+  #stats { display: flex; gap: 10px; font-size: 0.8rem; color: var(--muted); }
+  .stat-chip {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 3px 10px;
+  }
+  .stat-chip span { color: var(--accent); font-weight: 600; }
+  #crawl-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.78rem; padding: 3px 10px;
+    border-radius: 20px; border: 1px solid var(--border);
+    background: var(--surface2); cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  #crawl-badge:hover { border-color: var(--accent); }
+  #crawl-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--warning);
+    animation: pulse 1.5s infinite;
+  }
+  #crawl-dot.done { background: var(--success); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Layout */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Sidebar */
+  #sidebar {
+    width: var(--sidebar-w);
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sidebar-tab-bar {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .sidebar-tab {
+    flex: 1; padding: 9px 0; font-size: 0.75rem; text-align: center;
+    text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+    cursor: pointer; border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .sidebar-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .sidebar-panel { flex: 1; overflow-y: auto; display: none; }
+  .sidebar-panel.active { display: block; }
+
+  /* Tree */
+  #tree-container { padding: 8px 0; font-size: 0.82rem; }
+  .tree-node { user-select: none; }
+  .tree-label {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 12px; cursor: pointer;
+    border-radius: 4px; transition: background 0.15s; color: var(--text);
+  }
+  .tree-label:hover { background: var(--surface2); }
+  .tree-label.active { background: rgba(79,142,247,0.15); color: var(--accent); }
+  .tree-toggle { font-size: 0.7rem; width: 12px; flex-shrink: 0; color: var(--muted); }
+  .tree-title { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tree-children { margin-left: 16px; display: none; }
+  .tree-children.open { display: block; }
+
+  /* Crawl status panel */
+  #crawl-panel { padding: 14px; font-size: 0.82rem; }
+  .crawl-section { margin-bottom: 18px; }
+  .crawl-section-title {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  .crawl-big-num { font-size: 1.8rem; font-weight: 700; color: var(--accent); line-height: 1; }
+  .crawl-big-label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+  .crawl-nums-row { display: flex; gap: 16px; margin-bottom: 16px; }
+  .crawl-num-box {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px;
+  }
+  /* depth bars */
+  .depth-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .depth-label { width: 50px; font-size: 0.78rem; color: var(--muted); flex-shrink: 0; }
+  .depth-bar-wrap { flex: 1; background: var(--surface2); border-radius: 3px; height: 14px; overflow: hidden; }
+  .depth-bar { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.4s; min-width: 2px; }
+  .depth-count { width: 30px; font-size: 0.78rem; color: var(--muted); text-align: right; flex-shrink: 0; }
+  /* recent pages */
+  .recent-page {
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.78rem;
+    color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .recent-page:last-child { border-bottom: none; }
+  .recent-depth { color: var(--muted); font-size: 0.7rem; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 10px; border-radius: 20px; font-size: 0.78rem;
+    margin-bottom: 12px;
+  }
+  .status-pill.crawling { background: rgba(245,166,35,0.12); border: 1px solid var(--warning); color: var(--warning); }
+  .status-pill.done { background: rgba(76,175,132,0.12); border: 1px solid var(--success); color: var(--success); }
+  .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .pill-dot.pulse { animation: pulse 1.5s infinite; }
+
+  /* Chat area */
+  #chat-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  #messages {
+    flex: 1; overflow-y: auto; padding: 20px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .msg { max-width: 780px; width: 100%; }
+  .msg.user { align-self: flex-end; }
+  .msg.assistant { align-self: flex-start; }
+  .bubble {
+    padding: 12px 16px; border-radius: 12px;
+    line-height: 1.6; font-size: 0.9rem;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .msg.user .bubble { background: var(--accent2); color: #fff; border-bottom-right-radius: 4px; }
+  .msg.assistant .bubble { background: var(--surface2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .msg-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; padding: 0 4px; }
+  .msg.user .msg-label { text-align: right; }
+  .bubble b, .bubble strong { color: var(--accent); }
+  .bubble a { color: var(--accent); text-decoration: none; }
+  .bubble a:hover { text-decoration: underline; }
+  .bubble code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-size: 0.85em; }
+  .bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+  .typing::after { content: '▌'; animation: blink 0.8s infinite; color: var(--accent); }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+  /* Welcome */
+  #welcome { margin: auto; text-align: center; color: var(--muted); padding: 40px; max-width: 500px; }
+  #welcome h2 { color: var(--text); margin-bottom: 12px; font-size: 1.3rem; }
+  #welcome p { font-size: 0.88rem; line-height: 1.7; margin-bottom: 20px; }
+  .example-queries { display: flex; flex-direction: column; gap: 8px; }
+  .example-q {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px; font-size: 0.82rem;
+    cursor: pointer; text-align: left; color: var(--text); transition: border-color 0.15s;
+  }
+  .example-q:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Input */
+  #input-area {
+    padding: 14px 20px; border-top: 1px solid var(--border);
+    background: var(--surface); display: flex; gap: 10px;
+    align-items: flex-end; flex-shrink: 0;
+  }
+  #query-input {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--text); padding: 10px 14px;
+    font-size: 0.9rem; resize: none; min-height: 42px; max-height: 120px;
+    outline: none; line-height: 1.5; transition: border-color 0.15s;
+  }
+  #query-input:focus { border-color: var(--accent); }
+  #send-btn {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 10px; padding: 10px 18px; font-size: 0.9rem;
+    font-weight: 600; cursor: pointer; height: 42px; transition: opacity 0.15s;
+  }
+  #send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  #send-btn:hover:not(:disabled) { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>CARB Regulations Chatbot</h1>
+  <div id="header-right">
+    <div id="stats">
+      <div class="stat-chip">Pages: <span id="stat-pages">—</span></div>
+      <div class="stat-chip">Links: <span id="stat-edges">—</span></div>
+      <div class="stat-chip">Depth: <span id="stat-depth">—</span></div>
+    </div>
+    <div id="crawl-badge" onclick="switchTab('crawl')">
+      <span id="crawl-dot"></span>
+      <span id="crawl-badge-label">Crawler</span>
+    </div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div class="sidebar-tab-bar">
+      <div class="sidebar-tab active" id="tab-tree" onclick="switchTab('tree')">Tree</div>
+      <div class="sidebar-tab" id="tab-crawl" onclick="switchTab('crawl')">Crawl Status</div>
+    </div>
+
+    <!-- Tree Panel -->
+    <div class="sidebar-panel active" id="panel-tree">
+      <div id="tree-container">
+        <div style="padding:16px;color:var(--muted);font-size:0.82rem">Loading tree…</div>
+      </div>
+    </div>
+
+    <!-- Crawl Status Panel -->
+    <div class="sidebar-panel" id="panel-crawl">
+      <div id="crawl-panel">
+        <div id="crawl-status-pill" class="status-pill crawling">
+          <span class="pill-dot pulse"></span>
+          <span id="crawl-status-text">Crawling…</span>
+        </div>
+
+        <div class="crawl-nums-row">
+          <div class="crawl-num-box">
+            <div class="crawl-big-num" id="cp-pages">—</div>
+            <div class="crawl-big-label">Pages</div>
+          </div>
+          <div class="crawl-num-box">
+            <div class="crawl-big-num" id="cp-edges">—</div>
+            <div class="crawl-big-label">Links</div>
+          </div>
+          <div class="crawl-num-box">
+            <div class="crawl-big-num" id="cp-errors">—</div>
+            <div class="crawl-big-label">Errors</div>
+          </div>
+        </div>
+
+        <div class="crawl-section">
+          <div class="crawl-section-title">Pages by Depth</div>
+          <div id="depth-bars"></div>
+        </div>
+
+        <div class="crawl-section">
+          <div class="crawl-section-title">Recently Crawled</div>
+          <div id="recent-pages"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="chat-area">
+    <div id="messages">
+      <div id="welcome">
+        <h2>Ask about CARB Regulations</h2>
+        <p>Query document content or navigate the hierarchy of the California Air Resources Board regulations indexed from Westlaw.</p>
+        <div class="example-queries">
+          <button class="example-q" onclick="sendExample(this)">What are the children of Division 3?</button>
+          <button class="example-q" onclick="sendExample(this)">What does CARB regulate for heavy-duty diesel vehicles?</button>
+          <button class="example-q" onclick="sendExample(this)">Show path from root to Chapter 1</button>
+          <button class="example-q" onclick="sendExample(this)">What are the children of Chapter 8?</button>
+          <button class="example-q" onclick="sendExample(this)">What are the requirements for zero emission vehicles?</button>
+        </div>
+      </div>
+    </div>
+    <div id="input-area">
+      <textarea id="query-input" placeholder="Ask a question about CARB regulations…" rows="1"></textarea>
+      <button id="send-btn" onclick="sendQuery()">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Markdown-lite renderer ────────────────────────────────────────────────
+function renderMarkdown(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/^---$/gm, '<hr/>')
+    .replace(/^• /gm, '&bull; ')
+    .replace(/^#+\s(.+)$/gm, '<strong>$1</strong>');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ─── Sidebar tabs ───────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+}
+
+// ─── Stats (header bar) ─────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const r = await fetch('/api/stats');
+    const d = await r.json();
+    document.getElementById('stat-pages').textContent = d.pages.toLocaleString();
+    document.getElementById('stat-edges').textContent = d.edges.toLocaleString();
+    document.getElementById('stat-depth').textContent = d.max_depth;
+  } catch(e) {}
+}
+
+// ─── Crawl status panel ─────────────────────────────────────────────────────
+let prevPageCount = 0;
+
+async function loadCrawlStatus() {
+  try {
+    const r = await fetch('/api/crawl-status');
+    const d = await r.json();
+
+    // Header nums
+    document.getElementById('cp-pages').textContent = d.total_pages.toLocaleString();
+    document.getElementById('cp-edges').textContent = d.total_edges.toLocaleString();
+    document.getElementById('cp-errors').textContent = d.errors;
+
+    // Also update header chips
+    document.getElementById('stat-pages').textContent = d.total_pages.toLocaleString();
+    document.getElementById('stat-edges').textContent = d.total_edges.toLocaleString();
+
+    // Determine crawl state: if page count hasn't changed in 2 polls → done
+    const isCrawling = d.total_pages !== prevPageCount || prevPageCount === 0;
+    prevPageCount = d.total_pages;
+
+    const dot = document.getElementById('crawl-dot');
+    const pill = document.getElementById('crawl-status-pill');
+    const pillText = document.getElementById('crawl-status-text');
+    const badgeLabel = document.getElementById('crawl-badge-label');
+
+    if (isCrawling) {
+      dot.classList.remove('done');
+      pill.className = 'status-pill crawling';
+      pill.querySelector('.pill-dot').classList.add('pulse');
+      pillText.textContent = `Crawling… ${d.total_pages} pages`;
+      badgeLabel.textContent = `Crawling (${d.total_pages})`;
+    } else {
+      dot.classList.add('done');
+      pill.className = 'status-pill done';
+      pill.querySelector('.pill-dot').classList.remove('pulse');
+      pillText.textContent = `Complete — ${d.total_pages} pages indexed`;
+      badgeLabel.textContent = `Done (${d.total_pages})`;
+    }
+
+    // Depth bars
+    const maxCount = Math.max(...(d.by_depth.map(r => r.count)), 1);
+    const barsEl = document.getElementById('depth-bars');
+    barsEl.innerHTML = d.by_depth.map(row => `
+      <div class="depth-row">
+        <div class="depth-label">Depth ${row.depth}</div>
+        <div class="depth-bar-wrap">
+          <div class="depth-bar" style="width:${Math.round(row.count/maxCount*100)}%"></div>
+        </div>
+        <div class="depth-count">${row.count}</div>
+      </div>
+    `).join('');
+
+    // Recent pages
+    const recentEl = document.getElementById('recent-pages');
+    recentEl.innerHTML = d.recent.map(p => `
+      <div class="recent-page" title="${escHtml(p.url)}">
+        <span class="recent-depth">[d${p.depth}]</span> ${escHtml(p.title || p.url)}
+      </div>
+    `).join('') || '<div style="color:var(--muted);font-size:0.78rem;padding:4px 0">No pages yet</div>';
+
+  } catch(e) {}
+}
+
+// ─── Tree ───────────────────────────────────────────────────────────────────
+async function loadTree() {
+  try {
+    const r = await fetch('/api/tree');
+    const nodes = await r.json();
+    const container = document.getElementById('tree-container');
+    if (!nodes.length) {
+      container.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.82rem">No documents yet.<br>Crawler is running…</div>';
+      return;
+    }
+    container.innerHTML = '';
+    nodes.forEach(n => container.appendChild(buildTreeNode(n)));
+  } catch(e) {
+    document.getElementById('tree-container').innerHTML =
+      '<div style="padding:16px;color:var(--muted);font-size:0.82rem">Tree unavailable</div>';
+  }
+}
+
+function buildTreeNode(node) {
+  const div = document.createElement('div');
+  div.className = 'tree-node';
+  const hasChildren = node.children && node.children.length > 0;
+  const label = document.createElement('div');
+  label.className = 'tree-label';
+  label.innerHTML = `
+    <span class="tree-toggle">${hasChildren ? '▶' : ' '}</span>
+    <span class="tree-title" title="${escHtml(node.title || 'Untitled')}">${escHtml(node.title || 'Untitled')}</span>
+  `;
+  label.onclick = () => {
+    document.querySelectorAll('.tree-label.active').forEach(el => el.classList.remove('active'));
+    label.classList.add('active');
+    document.getElementById('query-input').value = `Tell me about "${node.title}"`;
+    document.getElementById('query-input').focus();
+    if (hasChildren) {
+      const childDiv = div.querySelector('.tree-children');
+      const toggle = label.querySelector('.tree-toggle');
+      childDiv.classList.toggle('open');
+      toggle.textContent = childDiv.classList.contains('open') ? '▼' : '▶';
+    }
+  };
+  div.appendChild(label);
+  if (hasChildren) {
+    const childContainer = document.createElement('div');
+    childContainer.className = 'tree-children';
+    node.children.forEach(c => childContainer.appendChild(buildTreeNode(c)));
+    div.appendChild(childContainer);
+  }
+  return div;
+}
+
+// ─── Chat ───────────────────────────────────────────────────────────────────
+let isStreaming = false;
+
+function addMessage(role, text, streaming = false) {
+  const welcome = document.getElementById('welcome');
+  if (welcome) welcome.remove();
+  const msgs = document.getElementById('messages');
+  const wrap = document.createElement('div');
+  wrap.className = `msg ${role}`;
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = role === 'user' ? 'You' : 'Assistant';
+  wrap.appendChild(label);
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble' + (streaming ? ' typing' : '');
+  bubble.innerHTML = role === 'assistant' ? renderMarkdown(text) : escHtml(text);
+  wrap.appendChild(bubble);
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+  return bubble;
+}
+
+async function sendQuery() {
+  if (isStreaming) return;
+  const input = document.getElementById('query-input');
+  const query = input.value.trim();
+  if (!query) return;
+  input.value = '';
+  input.style.height = 'auto';
+  isStreaming = true;
+  document.getElementById('send-btn').disabled = true;
+  addMessage('user', query);
+  const bubble = addMessage('assistant', '', true);
+  let fullText = '';
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query}),
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, {stream: true});
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const d = JSON.parse(line.slice(6));
+          fullText += d.text || '';
+          bubble.innerHTML = renderMarkdown(fullText);
+          bubble.classList.toggle('typing', !d.done);
+          document.getElementById('messages').scrollTop = 999999;
+        } catch(e) {}
+      }
+    }
+  } catch(e) {
+    bubble.innerHTML = '<em style="color:#e57373">Error communicating with server.</em>';
+    bubble.classList.remove('typing');
+  }
+  isStreaming = false;
+  document.getElementById('send-btn').disabled = false;
+  input.focus();
+}
+
+function sendExample(btn) {
+  document.getElementById('query-input').value = btn.textContent;
+  sendQuery();
+}
+
+// Auto-resize textarea
+document.getElementById('query-input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+
+// Enter to send (Shift+Enter for newline)
+document.getElementById('query-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuery(); }
+});
+
+// ─── Init & polling ─────────────────────────────────────────────────────────
+loadCrawlStatus();
+loadTree();
+// Refresh crawl status every 5s, tree every 15s
+setInterval(loadCrawlStatus, 5000);
+setInterval(loadTree, 15000);
+</script>
+</body>
+</html>

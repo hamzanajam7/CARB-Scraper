@@ -1,0 +1,100 @@
+# CARB Scraper + Chatbot
+
+**Timebox:** ~2 hours
+
+## Overview
+
+You will build:
+
+1. A crawler that ingests California Air Resources Board (CARB) regulations starting from a single entry URL.
+2. A local chatbot interface that allows a user to query the scraped data.
+
+The system must capture document content and the relationships between documents, and expose both through the chatbot.
+
+We care about:
+
+- What you can do with a limited amount of time
+- Your ability to reason about structure
+- Your system design decisions
+
+---
+
+## Starting Point
+
+Use the following link as your root
+
+- [https://shared-govt.westlaw.com/calregs/Browse/Home/California/CaliforniaCodeofRegulations?guid=I789FF3B05A1E11EC8227000D3A7C4BC3&originationContext=documenttoc&transitionType=Default&contextData=(sc.Default)](https://shared-govt.westlaw.com/calregs/Browse/Home/California/CaliforniaCodeofRegulations?guid=I789FF3B05A1E11EC8227000D3A7C4BC3&originationContext=documenttoc&transitionType=Default&contextData=(sc.Default))
+
+You should begin with a single link and discover the rest programmatically.
+
+---
+
+## Core Requirements
+
+### 1. Crawl the Site
+
+Your solution must:
+
+- Crawl all regulation pages reachable from the starting link
+- Collect and store:
+    - All discovered links (including titles for the links)
+    - Every document’s title
+    - Every document’s main content (you choose the format)
+- Capture the relationships between the pages
+
+---
+
+### 2. Store the Data
+
+Your system should store:
+
+- Links
+- Titles
+- Content
+- Relationships between pages
+
+You may choose any storage approach
+
+---
+
+### 3. Chatbot Interface (Required)
+
+Build a local chatbot interface that allows a user to:
+
+- Ask questions about document content
+    - Example: “What does regulation X say about emissions limits?”
+- Ask questions about relationships
+    - “What is the parent of X?”
+    - “What are the children of Y?”
+    - “Where does this document sit in the hierarchy?”
+    - “Show the path from the root to Z.”
+
+The chatbot must use the scraped data as its source of truth.
+
+You choose the user interface
+
+---
+
+## Deliverables
+
+15 minute demo of the result
+
+Explain your design decisions
+
+---
+
+## Technical Setup (Suggested)
+
+You may use any language / frameworks
+
+- Use a local IDE
+- Consider `uv` for environment management
+- Recommend installing and using Playwright (for JS-rendered content)
+
+You are free to use other tooling if preferred
+
+---
+
+---
+
+Good luck!
