@@ -24,19 +24,21 @@ cp .env.example .env
 # Get a key at: https://console.anthropic.com
 ```
 
-### 3. Run the crawler, then start the app
+### 3. Start the app
 
 ```bash
-# Crawl all CARB Division 3 regulations (~900 pages, ~40 min)
-uv run python -m src.crawler.crawler
-
-# Start the chatbot server
 uv run python -m src.api.main
 ```
 
 Open **http://localhost:8000**
 
-> The crawler saves progress as it runs — you can Ctrl+C and restart safely. Already-visited pages are skipped via GUID deduplication.
+> The database (`data/carb.db`) is pre-built and included — 903 pages of CARB Division 3 regulations are ready to query immediately. No crawling needed.
+
+**To re-crawl or update the database:**
+```bash
+uv run python -m src.crawler.crawler
+```
+The crawler saves progress as it runs — Ctrl+C and restart safely. Already-visited pages are skipped via GUID deduplication (~40 min for a full crawl).
 
 ---
 
