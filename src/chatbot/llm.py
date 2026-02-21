@@ -72,6 +72,34 @@ def _build_context(docs: list[dict]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
+def _best_excerpt(full: str, fts_snippet: str, window: int = 6000) -> str:
+    """Extract the most relevant portion of a large document.
+
+    For small docs (≤ window chars) return the whole thing.
+    For large docs, use the FTS snippet as an anchor to find where the
+    relevant content is, then return a window of text around that position.
+    """
+    if len(full) <= window:
+        return full
+
+    # Strip FTS bold tags, then pick the longest non-empty segment between
+    # ellipses as the anchor (snippets typically start with "..." so [0] is empty)
+    anchor = re.sub(r"</?b>", "", fts_snippet or "")
+    segments = [s.strip() for s in anchor.split("...") if len(s.strip()) > 10]
+    anchor = max(segments, key=len)[:80] if segments else ""
+
+    pos = full.find(anchor) if len(anchor) > 10 else -1
+    if pos >= 0:
+        # Centre the window on the anchor, bias slightly earlier for context
+        start = max(0, pos - window // 4)
+    else:
+        # Anchor not found — skip the boilerplate header (first ~800 chars)
+        # which is always the Westlaw citation block, not regulation text
+        start = min(800, len(full) - window)
+
+    return full[start : start + window]
+
+
 async def answer_content_stream(
     query: str, db: Database
 ) -> AsyncGenerator[str, None]:
@@ -79,11 +107,11 @@ async def answer_content_stream(
     fts_query = _expand_acronyms(query)
     docs = await db.fts_search(fts_query, limit=8)
 
-    # Enrich snippets with fuller content for top results
+    # Enrich snippets with the most relevant portion of each document
     for doc in docs[:5]:
         full = await db.get_full_content(doc["id"])
         if full:
-            doc["snippet"] = full[:4000]
+            doc["snippet"] = _best_excerpt(full, doc.get("snippet", ""))
 
     context = _build_context(docs)
 
