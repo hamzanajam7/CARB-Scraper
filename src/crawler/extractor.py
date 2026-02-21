@@ -126,6 +126,11 @@ async def extract_page(page: Page, base_url: str) -> ExtractedPage:
             continue
         seen_hrefs.add(normalised)
         link_text = _clean_text(a.get_text()) or normalised
+        # Skip "Title X." links — these go UP to a parent Title page, which
+        # then links out to all other Divisions (e.g. Division 1 DMV, Division 2
+        # CHP) that are outside Division 3 Air Resources Board scope.
+        if re.match(r'^Title\s+\d+', link_text, re.IGNORECASE):
+            continue
         links.append((normalised, link_text))
 
     return ExtractedPage(
