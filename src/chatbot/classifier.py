@@ -19,8 +19,8 @@ _RELATIONSHIP_PATTERNS = [
     r"\bstructure\s+of\b",
     r"\bshow\s+the\s+path\b",
     r"\boutgoing\s+links?\b",
-    r"\blinks?\s+(from|to)\b",
-    r"\brelated\s+to\b",
+    r"\blinks?\s+(from|to|does|in)\b",
+    r"\bwhat\s+links?\b",
     r"\bsit\s+in\b",
 ]
 

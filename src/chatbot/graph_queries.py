@@ -22,9 +22,10 @@ def _extract_subject(query: str) -> str:
         r"path\s+to\s+['\"]?(.+?)['\"]?\??$",
         r"path\s+from\s+['\"]?(.+?)['\"]?\??$",
         r"(?:hierarchy|structure)\s+of\s+['\"]?(.+?)['\"]?\??$",
-        r"(?:where\s+(?:does|is))\s+['\"]?(.+?)['\"]?\s+(?:sit|belong|live)",
+        r"(?:where\s+(?:does|is))\s+['\"]?(.+?)['\"]?\s+(?:sit|belong|live|fit|fall|go)",
         r"(?:under\s+which).*?['\"]?(.+?)['\"]?\??$",
         r"links?\s+(?:from|to)\s+['\"]?(.+?)['\"]?\??$",
+        r"what\s+links?\s+does\s+['\"]?(.+?)['\"]?\s+have",
     ]
     for pat in patterns:
         m = re.search(pat, query, re.IGNORECASE)
