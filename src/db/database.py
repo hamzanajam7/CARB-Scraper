@@ -224,12 +224,30 @@ class Database:
 
     async def fts_search(self, query: str, limit: int = 5) -> list[dict]:
         """BM25-ranked full-text search via FTS5."""
-        safe = query.replace('"', '""')
+        import re as _re
+        _STOP = {
+            "what", "does", "do", "did", "is", "are", "was", "were", "the",
+            "a", "an", "and", "or", "in", "on", "at", "to", "of", "for",
+            "with", "by", "from", "that", "this", "it", "be", "have", "has",
+            "say", "says", "about", "tell", "me", "us", "how", "why", "when",
+            "where", "which", "who", "can", "carb",
+        }
+        # Strip punctuation and FTS5-special chars
+        cleaned = _re.sub(r"[^\w\s]", " ", query)
+        words = [w for w in cleaned.lower().split() if w not in _STOP and len(w) > 2]
+        if not words:
+            words = cleaned.split()
+
+        # Use OR for natural-language recall; BM25 ranking handles relevance
+        or_query = " OR ".join(words)
+        and_query = " ".join(words)
         try:
-            results = await self._fts_raw(safe, limit)
+            results = await self._fts_raw(or_query, limit)
+            if not results:
+                results = await self._fts_raw(and_query, limit)
         except Exception:
             try:
-                results = await self._fts_raw(f'"{safe}"', limit)
+                results = await self._fts_raw(and_query, limit)
             except Exception:
                 results = await self.find_pages_by_title(query, limit)
         return results
