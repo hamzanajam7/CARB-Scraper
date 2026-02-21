@@ -29,13 +29,20 @@ ROOT_URL = (
 MAX_PAGES = 2000         # CARB-only scope is much smaller than full CCR
 MAX_DEPTH = 6
 CRAWL_TIMEOUT_SEC = 3600  # 60 minutes
-REQUEST_DELAY_SEC = 1.0
+REQUEST_DELAY_SEC = 0.3
 
 
 def _guid_from_url(url: str) -> str | None:
-    qs = parse_qs(urlparse(url).query)
-    guids = qs.get("guid", [])
-    return guids[0] if guids else None
+    parsed = urlparse(url)
+    # Browse URLs: ?guid=XXXX
+    qs = parse_qs(parsed.query)
+    if qs.get("guid"):
+        return qs["guid"][0]
+    # Document URLs: /calregs/Document/XXXX
+    parts = parsed.path.rstrip("/").split("/")
+    if len(parts) >= 2 and parts[-2].lower() == "document":
+        return parts[-1]
+    return None
 
 
 async def crawl(start_url: str = ROOT_URL, db: Database | None = None) -> None:
@@ -46,8 +53,9 @@ async def crawl(start_url: str = ROOT_URL, db: Database | None = None) -> None:
     else:
         owns_db = False
 
-    queue: deque[tuple[str, int, int | None]] = deque()
-    queue.append((start_url, 0, None))
+    # (url, depth, parent_id, link_text) — link_text used when we crawl child to record edge
+    queue: deque[tuple[str, int, int | None, str]] = deque()
+    queue.append((start_url, 0, None, ""))
 
     visited_guids: set[str] = set()
     visited_urls: set[str] = set()
@@ -61,7 +69,7 @@ async def crawl(start_url: str = ROOT_URL, db: Database | None = None) -> None:
                     logger.info("Crawl timeout reached")
                     break
 
-                url, depth, parent_id = queue.popleft()
+                url, depth, parent_id, link_text_from_parent = queue.popleft()
 
                 # Dedup by GUID (Westlaw uses GUIDs as canonical IDs)
                 guid = _guid_from_url(url)
@@ -100,24 +108,20 @@ async def crawl(start_url: str = ROOT_URL, db: Database | None = None) -> None:
                     status=status,
                 )
                 total += 1
-                logger.info(f"  → '{extracted.title[:60]}' | {len(extracted.links)} links")
+                title_preview = (extracted.title or "Untitled")[:60]
+                logger.info(f"  → '{title_preview}' | {len(extracted.links)} links")
 
-                # Enqueue child links and record edges
+                # Record edge from parent to this page (we have parent_id and link_text now)
+                if parent_id is not None and link_text_from_parent:
+                    await db.insert_edge(parent_id, page_id, link_text_from_parent)
+
+                # Enqueue child links (pass link_text so child can record edge when it is crawled)
                 if depth < MAX_DEPTH:
                     for child_url, link_text in extracted.links:
                         child_guid = _guid_from_url(child_url)
                         child_dedup = child_guid or child_url
                         if child_dedup not in visited_guids and child_url not in visited_urls:
-                            queue.append((child_url, depth + 1, page_id))
-
-                        # Record edge (try to resolve to_id if already crawled)
-                        child_id = (
-                            await db.get_id_by_guid(child_guid)
-                            if child_guid
-                            else await db.get_id_by_url(child_url)
-                        )
-                        if child_id and child_id != page_id:
-                            await db.insert_edge(page_id, child_id, link_text)
+                            queue.append((child_url, depth + 1, page_id, link_text))
 
                 await asyncio.sleep(REQUEST_DELAY_SEC)
 

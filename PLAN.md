@@ -122,23 +122,22 @@ END;
 
 ### Key Parameters (tuneable)
 ```python
-MAX_PAGES = 500          # Hard cap
+MAX_PAGES = 2000         # Hard cap (CARB-only scope)
 MAX_DEPTH = 6            # TOC depth (Title → Chapter → Article → Section)
-CRAWL_TIMEOUT_SEC = 1800 # 30-minute wall-clock limit
-REQUEST_DELAY_SEC = 1.0  # Polite rate limiting
+CRAWL_TIMEOUT_SEC = 3600 # 60-minute wall-clock limit
+REQUEST_DELAY_SEC = 0.3  # Polite rate limiting
 DOMAIN_FILTER = "shared-govt.westlaw.com"
 PATH_PREFIX = "/calregs/"
 ```
 
 ### BFS Flow (`crawler.py`)
-1. Seed queue with `(root_url, depth=0, parent_id=None)`
+1. Seed queue with `(root_url, depth=0, parent_id=None, link_text="")`
 2. Pop URL, skip if already visited (dedup by GUID if present, else URL)
 3. Call `fetch_page(url)` — Playwright: `goto()` → `wait_for_load_state('networkidle')` → try expanding collapsed TOC nodes
 4. Call `extract_page(page_html)` — CSS selector cascade for title + content
-5. Upsert page into SQLite; record parent relationship
-6. Extract all `<a>` tags; filter by domain + path prefix; enqueue unseen URLs with `depth+1`
-7. Insert edges for all discovered links (not just followed ones)
-8. `await asyncio.sleep(REQUEST_DELAY_SEC)`
+5. Upsert page into SQLite; record parent relationship; if `parent_id` and `link_text` present, insert edge from parent to this page
+6. Extract all `<a>` tags; filter by domain + path prefix; enqueue unseen URLs with `(url, depth+1, page_id, link_text)` so the child can record the edge when crawled
+7. `await asyncio.sleep(REQUEST_DELAY_SEC)`
 
 ### Content Extraction (`extractor.py`)
 CSS selector cascade (try in order, use first non-empty result):
@@ -236,7 +235,7 @@ uv run playwright install chromium
 # 2. Add API key
 echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
 
-# 3. Crawl (runs for up to 30 min or 500 pages)
+# 3. Crawl (runs for up to 60 min or 2000 pages)
 uv run python -m src.crawler.crawler
 
 # 4. Start chatbot
@@ -248,9 +247,9 @@ uv run python -m src.api.main
 
 ## Verification
 
-- [ ] Crawler populates `data/carb.db` with pages, edges, FTS index
-- [ ] `/api/stats` returns non-zero page count
-- [ ] `/api/tree` returns nested hierarchy
-- [ ] Relationship query ("What is the parent of Title 13?") returns SQL-sourced answer
-- [ ] Content query ("What does CARB say about emissions limits?") returns Claude answer with citations
-- [ ] Path query ("Show path from root to section X") returns correct breadcrumb
+- [x] Crawler populates `data/carb.db` with pages, edges, FTS index
+- [x] `/api/stats` returns non-zero page count
+- [x] `/api/tree` returns nested hierarchy
+- [x] Relationship query ("What is the parent of Title 13?") returns SQL-sourced answer
+- [x] Content query ("What does CARB say about emissions limits?") returns Claude answer with citations
+- [x] Path query ("Show path from root to section X") returns correct breadcrumb

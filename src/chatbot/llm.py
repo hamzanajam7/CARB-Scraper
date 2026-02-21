@@ -42,13 +42,13 @@ async def answer_content_stream(
     query: str, db: Database
 ) -> AsyncGenerator[str, None]:
     """Yield answer tokens from Claude with FTS5-retrieved context."""
-    docs = await db.fts_search(query, limit=5)
+    docs = await db.fts_search(query, limit=8)
 
-    # Enrich snippets with fuller content for top 2 results
-    for doc in docs[:2]:
+    # Enrich snippets with fuller content for top results
+    for doc in docs[:5]:
         full = await db.get_full_content(doc["id"])
         if full:
-            doc["snippet"] = full[:2000]
+            doc["snippet"] = full[:4000]
 
     context = _build_context(docs)
 
@@ -57,7 +57,7 @@ async def answer_content_stream(
     client = get_client()
     async with client.messages.stream(
         model="claude-sonnet-4-6",
-        max_tokens=1024,
+        max_tokens=2048,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     ) as stream:
