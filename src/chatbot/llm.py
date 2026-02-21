@@ -72,31 +72,44 @@ def _build_context(docs: list[dict]) -> str:
     return "\n\n---\n\n".join(parts)
 
 
-def _best_excerpt(full: str, fts_snippet: str, window: int = 6000) -> str:
+def _key_terms(query: str) -> list[str]:
+    """Extract model years from a query for use as content-location anchors.
+
+    Only years are used — they are specific enough to pinpoint the right row
+    in a multi-year standards table without causing false relocations.
+
+    Section numbers are intentionally excluded: they appear in cross-references
+    throughout a document, so searching for them moves the window to citation
+    text rather than the substantive content we want.
+
+    Bigrams are also excluded: they appear too broadly and cause regressions.
+    """
+    return list(dict.fromkeys(re.findall(r'\b(?:19|20)\d{2}\b', query)))
+
+
+def _best_excerpt(full: str, fts_snippet: str, window: int = 8000) -> str:
     """Extract the most relevant portion of a large document.
 
     For small docs (≤ window chars) return the whole thing.
-    For large docs, use the FTS snippet as an anchor to find where the
-    relevant content is, then return a window of text around that position.
+    For large docs, use the FTS snippet as an anchor and bias the window
+    3/4 backward (anchor lands in the last quarter). This ensures table
+    headers, definition labels, and year rows that precede the FTS match
+    are captured — which is critical for regulatory standards tables where
+    the year row appears before the footnote that the FTS snippet typically
+    lands on.
     """
     if len(full) <= window:
         return full
 
-    # Strip FTS bold tags, then pick the longest non-empty segment between
-    # ellipses as the anchor (snippets typically start with "..." so [0] is empty)
-    anchor = re.sub(r"</?b>", "", fts_snippet or "")
-    segments = [s.strip() for s in anchor.split("...") if len(s.strip()) > 10]
+    # Longest non-empty segment between ellipses from the FTS snippet
+    # (snippets always start with "..." so split("...")[0] is empty)
+    anchor_text = re.sub(r"</?b>", "", fts_snippet or "")
+    segments = [s.strip() for s in anchor_text.split("...") if len(s.strip()) > 10]
     anchor = max(segments, key=len)[:80] if segments else ""
 
     pos = full.find(anchor) if len(anchor) > 10 else -1
-    if pos >= 0:
-        # Centre the window on the anchor, bias slightly earlier for context
-        start = max(0, pos - window // 4)
-    else:
-        # Anchor not found — skip the boilerplate header (first ~800 chars)
-        # which is always the Westlaw citation block, not regulation text
-        start = min(800, len(full) - window)
-
+    # 3/4 backward bias: anchor sits in the final quarter of the window
+    start = max(0, pos - window * 3 // 4) if pos >= 0 else min(800, len(full) - window)
     return full[start : start + window]
 
 
