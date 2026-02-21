@@ -103,6 +103,16 @@ async def extract_page(page: Page, base_url: str) -> ExtractedPage:
         if body:
             content = _clean_text(body.get_text(separator="\n"))[:5000]
 
+    # Strip leading breadcrumb noise ("Home Title 13. Motor Vehicles Division 3...")
+    # Find the first § section marker and start content from there;
+    # for TOC pages with no §, strip just the "Home ..." first line.
+    if content.startswith('Home '):
+        sec_match = re.search(r'(?=§\s*\d)', content)
+        if sec_match:
+            content = content[sec_match.start():].strip()
+        else:
+            content = re.sub(r'^Home[^\n]+\n?', '', content).strip()
+
     # Extract links
     links: list[tuple[str, str]] = []
     seen_hrefs: set[str] = set()
